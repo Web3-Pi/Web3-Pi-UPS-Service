@@ -36,3 +36,8 @@ level = "info"
 # Optional path for file logging (in addition to journald)
 # Leave empty or comment out to log only to journald
 # file_path = "/var/log/w3p-ups.log"
+
+[ipc]
+# Unix socket path for IPC communication
+# Used by 'status' and 'monitor' commands to connect to the daemon
+socket_path = "/var/run/w3p-ups/ups.sock"

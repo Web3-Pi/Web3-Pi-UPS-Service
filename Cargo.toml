@@ -19,6 +19,7 @@ log = "0.4"
 simplelog = "0.12"
 signal-hook = "0.3"
 anyhow = "1.0"
+crossterm = "0.28"
 
 [profile.release]
 opt-level = "z"     # Optimize for size
