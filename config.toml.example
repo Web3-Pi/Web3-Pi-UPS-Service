@@ -1,0 +1,38 @@
+# Web3 Pi UPS Service Configuration
+# Copy this file to /etc/w3p-ups/config.toml and adjust as needed
+
+[serial]
+# Serial port where the RP2040 Pico is connected
+port = "/dev/ttyACM0"
+# Baud rate for serial communication
+baud_rate = 115200
+
+[battery]
+# Battery SOC (State of Charge) percentage below which shutdown is triggered
+# Shutdown only occurs when BOTH conditions are met:
+# 1. SOC is below this threshold
+# 2. Input voltage indicates we're running on battery (vi < min_valid_voltage)
+shutdown_threshold = 10
+
+# Minimum input voltage (in mV) to consider grid power as connected
+# Values 8000-21000 typically indicate grid power is present
+# Below this value, the system is considered to be running on battery
+min_valid_voltage = 8000
+
+[shutdown]
+# Path to the shutdown script that will be executed
+# This script should handle graceful shutdown of your services
+script_path = "/etc/w3p-ups/shutdown.sh"
+
+# Delay in seconds before executing shutdown after low battery is detected
+# This gives time for power to potentially be restored
+# If power is restored during this period, shutdown is cancelled
+delay_seconds = 30
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Optional path for file logging (in addition to journald)
+# Leave empty or comment out to log only to journald
+# file_path = "/var/log/w3p-ups.log"

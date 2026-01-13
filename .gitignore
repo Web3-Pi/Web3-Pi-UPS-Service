@@ -1,0 +1,22 @@
+# Rust build artifacts
+/target/
+
+# Claude Code settings
+.claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test artifacts
+*.profraw

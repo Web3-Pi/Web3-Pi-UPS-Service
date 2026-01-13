@@ -1,0 +1,28 @@
+[package]
+name = "w3p-ups"
+version = "1.0.0"
+edition = "2021"
+authors = ["Web3-Pi Team"]
+description = "UPS monitoring service for Web3 Pi - monitors battery status and initiates graceful shutdown"
+license = "MIT"
+repository = "https://github.com/Web3-Pi/Web3-Pi-UPS-Service"
+readme = "README.md"
+keywords = ["ups", "raspberry-pi", "battery", "monitoring", "systemd"]
+categories = ["command-line-utilities", "hardware-support"]
+
+[dependencies]
+serialport = "4.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+log = "0.4"
+simplelog = "0.12"
+signal-hook = "0.3"
+anyhow = "1.0"
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Link-time optimization
+codegen-units = 1   # Single codegen unit for better optimization
+panic = "abort"     # Abort on panic (smaller binary)
+strip = true        # Strip symbols

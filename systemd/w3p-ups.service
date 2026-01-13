@@ -1,0 +1,26 @@
+[Unit]
+Description=Web3 Pi UPS Monitoring Service
+Documentation=https://github.com/Web3-Pi/Web3-Pi-UPS-Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/w3p-ups --config /etc/w3p-ups/config.toml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log
+PrivateTmp=true
+
+# Allow access to serial devices
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target
