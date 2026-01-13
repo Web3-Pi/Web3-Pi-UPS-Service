@@ -53,10 +53,10 @@ download_release() {
     local url="https://github.com/${REPO}/releases/download/${version}/w3p-ups-${version}-aarch64.tar.gz"
     local tmp_dir=$(mktemp -d)
 
-    log_info "Downloading ${SERVICE_NAME} ${version}..."
+    log_info "Downloading ${SERVICE_NAME} ${version}..." >&2
     curl -fsSL "$url" -o "${tmp_dir}/release.tar.gz"
 
-    log_info "Extracting..."
+    log_info "Extracting..." >&2
     tar -xzf "${tmp_dir}/release.tar.gz" -C "${tmp_dir}"
 
     echo "${tmp_dir}"
