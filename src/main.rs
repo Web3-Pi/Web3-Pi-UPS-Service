@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -231,6 +231,9 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
                 if trimmed.is_empty() {
                     continue;
                 }
+
+                // Log raw JSON at trace level
+                trace!("RAW: {}", trimmed);
 
                 match serde_json::from_str::<UpsData>(trimmed) {
                     Ok(ups_data) => {
