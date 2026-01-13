@@ -37,6 +37,7 @@ struct SerialConfig {
 struct BatteryConfig {
     shutdown_threshold: u8,
     min_valid_voltage: u32,
+    max_valid_voltage: u32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -74,6 +75,8 @@ struct UpsData {
     ir: u32, // current rail
     soc: u8, // State of Charge (battery %)
     #[serde(default)]
+    sd: u8, // Shutdown decision battery % (used for shutdown logic)
+    #[serde(default)]
     bv: u32, // battery voltage
     #[serde(default)]
     ba: i32, // battery current (can be negative when discharging)
@@ -100,6 +103,7 @@ impl Default for Config {
             battery: BatteryConfig {
                 shutdown_threshold: 10,
                 min_valid_voltage: 8000,
+                max_valid_voltage: 26000,
             },
             shutdown: ShutdownConfig {
                 script_path: "/etc/w3p-ups/shutdown.sh".to_string(),
@@ -186,14 +190,14 @@ fn execute_shutdown_script(script_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn is_on_battery(vi: u32, min_valid_voltage: u32) -> bool {
-    vi < min_valid_voltage
+fn is_on_battery(vi: u32, min_valid_voltage: u32, max_valid_voltage: u32) -> bool {
+    vi < min_valid_voltage || vi > max_valid_voltage
 }
 
 fn should_shutdown(ups_data: &UpsData, config: &BatteryConfig) -> bool {
-    let low_soc = ups_data.soc < config.shutdown_threshold;
-    let on_battery = is_on_battery(ups_data.vi, config.min_valid_voltage);
-    low_soc && on_battery
+    let low_battery = ups_data.sd < config.shutdown_threshold;
+    let on_battery = is_on_battery(ups_data.vi, config.min_valid_voltage, config.max_valid_voltage);
+    low_battery && on_battery
 }
 
 fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> {
@@ -214,8 +218,8 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
     let log_interval = Duration::from_secs(60); // Log status every 60 seconds
 
     info!(
-        "Monitoring started. Shutdown threshold: {}% SOC when on battery (vi < {})",
-        config.battery.shutdown_threshold, config.battery.min_valid_voltage
+        "Monitoring started. Shutdown threshold: {}% SD when on battery (vi < {} or vi > {})",
+        config.battery.shutdown_threshold, config.battery.min_valid_voltage, config.battery.max_valid_voltage
     );
 
     while running.load(Ordering::SeqCst) {
@@ -238,30 +242,30 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
                 match serde_json::from_str::<UpsData>(trimmed) {
                     Ok(ups_data) => {
                         let on_battery =
-                            is_on_battery(ups_data.vi, config.battery.min_valid_voltage);
+                            is_on_battery(ups_data.vi, config.battery.min_valid_voltage, config.battery.max_valid_voltage);
                         let power_status = if on_battery { "BATTERY" } else { "GRID" };
 
                         // Periodic status logging
                         if last_log_time.elapsed() >= log_interval {
                             info!(
-                                "Status: SOC={}%, VI={}mV ({}), BV={}mV, BA={}mA",
-                                ups_data.soc, ups_data.vi, power_status, ups_data.bv, ups_data.ba
+                                "Status: SD={}%, SOC={}%, VI={}mV ({}), BV={}mV, BA={}mA",
+                                ups_data.sd, ups_data.soc, ups_data.vi, power_status, ups_data.bv, ups_data.ba
                             );
                             last_log_time = Instant::now();
                         }
 
                         debug!(
-                            "UPS: SOC={}%, VI={}mV, power={}",
-                            ups_data.soc, ups_data.vi, power_status
+                            "UPS: SD={}%, SOC={}%, VI={}mV, power={}",
+                            ups_data.sd, ups_data.soc, ups_data.vi, power_status
                         );
 
                         if should_shutdown(&ups_data, &config.battery) {
                             match shutdown_timer {
                                 None => {
                                     warn!(
-                                        "Low battery detected! SOC={}%, on battery power. \
+                                        "Low battery detected! SD={}%, on battery power. \
                                          Shutdown in {} seconds unless power restored.",
-                                        ups_data.soc, config.shutdown.delay_seconds
+                                        ups_data.sd, config.shutdown.delay_seconds
                                     );
                                     shutdown_timer = Some(Instant::now());
                                 }
@@ -270,16 +274,16 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
                                     if elapsed >= config.shutdown.delay_seconds {
                                         warn!(
                                             "Shutdown delay elapsed. Initiating shutdown... \
-                                             (SOC={}%, VI={}mV)",
-                                            ups_data.soc, ups_data.vi
+                                             (SD={}%, VI={}mV)",
+                                            ups_data.sd, ups_data.vi
                                         );
                                         execute_shutdown_script(&config.shutdown.script_path)?;
                                         return Ok(());
                                     } else {
                                         let remaining = config.shutdown.delay_seconds - elapsed;
                                         warn!(
-                                            "Low battery! SOC={}%, shutdown in {} seconds",
-                                            ups_data.soc, remaining
+                                            "Low battery! SD={}%, shutdown in {} seconds",
+                                            ups_data.sd, remaining
                                         );
                                     }
                                 }
@@ -289,8 +293,8 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
                             if shutdown_timer.is_some() {
                                 info!(
                                     "Power restored or battery charged. Shutdown cancelled. \
-                                     SOC={}%, VI={}mV",
-                                    ups_data.soc, ups_data.vi
+                                     SD={}%, VI={}mV",
+                                    ups_data.sd, ups_data.vi
                                 );
                                 shutdown_timer = None;
                             }
