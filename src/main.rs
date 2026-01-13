@@ -52,42 +52,42 @@ struct LoggingConfig {
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)]  // Fields parsed from JSON may be used for logging/debugging
+#[allow(dead_code)] // Fields parsed from JSON may be used for logging/debugging
 struct UpsData {
     #[serde(default)]
-    up: u32,        // uptime
+    up: u32, // uptime
     #[serde(default)]
-    pd: u8,         // PD status
+    pd: u8, // PD status
     #[serde(default)]
-    pdo: u8,        // PDO
+    pdo: u8, // PDO
     #[serde(default)]
-    cc: u8,         // CC line
+    cc: u8, // CC line
     #[serde(default)]
-    t: u32,         // temperature
+    t: u32, // temperature
     #[serde(default)]
-    vs: u32,        // voltage source
+    vs: u32, // voltage source
     #[serde(default)]
-    is: u32,        // current source
+    is: u32, // current source
     #[serde(default)]
-    vr: u32,        // voltage rail
+    vr: u32, // voltage rail
     #[serde(default)]
-    ir: u32,        // current rail
-    soc: u8,        // State of Charge (battery %)
+    ir: u32, // current rail
+    soc: u8, // State of Charge (battery %)
     #[serde(default)]
-    bv: u32,        // battery voltage
+    bv: u32, // battery voltage
     #[serde(default)]
-    ba: i32,        // battery current (can be negative when discharging)
+    ba: i32, // battery current (can be negative when discharging)
     #[serde(default)]
-    cs: u8,         // charging state
+    cs: u8, // charging state
     #[serde(default)]
-    pg: u8,         // power good
-    vi: u32,        // input voltage (8000-21000 = grid power OK)
+    pg: u8, // power good
+    vi: u32, // input voltage (8000-21000 = grid power OK)
     #[serde(default)]
-    ii: u32,        // input current
+    ii: u32, // input current
     #[serde(default)]
-    ci: u32,        // charge current
+    ci: u32, // charge current
     #[serde(default)]
-    cf: u8,         // charge flag
+    cf: u8, // charge flag
 }
 
 impl Default for Config {
@@ -117,8 +117,7 @@ fn load_config(path: &str) -> Result<Config> {
     if Path::new(path).exists() {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path))?;
-        toml::from_str(&content)
-            .with_context(|| format!("Failed to parse config file: {}", path))
+        toml::from_str(&content).with_context(|| format!("Failed to parse config file: {}", path))
     } else {
         warn!("Config file not found at {}, using defaults", path);
         Ok(Config::default())
@@ -198,7 +197,10 @@ fn should_shutdown(ups_data: &UpsData, config: &BatteryConfig) -> bool {
 }
 
 fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> {
-    info!("Opening serial port: {} at {} baud", config.serial.port, config.serial.baud_rate);
+    info!(
+        "Opening serial port: {} at {} baud",
+        config.serial.port, config.serial.baud_rate
+    );
 
     let port = serialport::new(&config.serial.port, config.serial.baud_rate)
         .timeout(Duration::from_secs(10))
@@ -211,9 +213,10 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
     let mut last_log_time = Instant::now();
     let log_interval = Duration::from_secs(60); // Log status every 60 seconds
 
-    info!("Monitoring started. Shutdown threshold: {}% SOC when on battery (vi < {})",
-          config.battery.shutdown_threshold,
-          config.battery.min_valid_voltage);
+    info!(
+        "Monitoring started. Shutdown threshold: {}% SOC when on battery (vi < {})",
+        config.battery.shutdown_threshold, config.battery.min_valid_voltage
+    );
 
     while running.load(Ordering::SeqCst) {
         line.clear();
@@ -231,7 +234,8 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
 
                 match serde_json::from_str::<UpsData>(trimmed) {
                     Ok(ups_data) => {
-                        let on_battery = is_on_battery(ups_data.vi, config.battery.min_valid_voltage);
+                        let on_battery =
+                            is_on_battery(ups_data.vi, config.battery.min_valid_voltage);
                         let power_status = if on_battery { "BATTERY" } else { "GRID" };
 
                         // Periodic status logging
@@ -316,7 +320,10 @@ fn print_help() {
     println!("    w3p-ups [OPTIONS]");
     println!();
     println!("OPTIONS:");
-    println!("    -c, --config <PATH>    Path to config file (default: {})", DEFAULT_CONFIG_PATH);
+    println!(
+        "    -c, --config <PATH>    Path to config file (default: {})",
+        DEFAULT_CONFIG_PATH
+    );
     println!("    -v, --version          Print version information");
     println!("    -h, --help             Print this help message");
     println!();
