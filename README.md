@@ -168,15 +168,28 @@ sudo /usr/local/bin/w3p-ups -c /etc/w3p-ups/config.toml
 
 ## Building from Source
 
-Requires Rust 1.70+:
+Requires Rust 1.70+ and system dependencies:
 
 ```bash
+# Install build dependencies (Debian/Ubuntu)
+sudo apt install -y pkg-config libudev-dev
+
 # Native build
 cargo build --release
 
 # Cross-compile for ARM64 (from x86_64)
 rustup target add aarch64-unknown-linux-gnu
 cargo build --release --target aarch64-unknown-linux-gnu
+
+# Set as a service
+sudo install -m 755 target/release/w3p-ups /usr/local/bin/
+sudo mkdir -p /etc/w3p-ups
+sudo cp config.toml.example /etc/w3p-ups/config.toml
+sudo cp scripts/shutdown.sh /etc/w3p-ups/
+sudo chmod +x /etc/w3p-ups/shutdown.sh
+sudo cp systemd/w3p-ups.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now w3p-ups
 ```
 
 ## Part of Web3 Pi Project
