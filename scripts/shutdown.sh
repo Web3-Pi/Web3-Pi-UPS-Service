@@ -20,9 +20,14 @@ log "Starting graceful shutdown sequence..."
 
 # Stop Ethereum services gracefully
 log "Stopping Ethereum services..."
-systemctl stop nimbus-validator.service 2>/dev/null
-systemctl stop nimbus-beacon-node.service 2>/dev/null
-systemctl stop geth.service 2>/dev/null
+
+systemctl stop w3p_nimbus-beacon.service 2>/dev/null || true
+systemctl stop w3p_lighthouse-beacon.service 2>/dev/null || true
+systemctl stop w3p_geth.service 2>/dev/null || true
+
+systemctl stop nimbus-validator.service 2>/dev/null || true
+systemctl stop nimbus-beacon-node.service 2>/dev/null || true
+systemctl stop geth.service 2>/dev/null || true
 
 # Flush all buffered data from RAM to disk to prevent data loss
 log "Syncing filesystems..."

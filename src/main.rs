@@ -33,9 +33,15 @@ struct SerialConfig {
     baud_rate: u32,
 }
 
+fn default_cancel_margin() -> u8 {
+    5
+}
+
 #[derive(Deserialize, Debug)]
 struct BatteryConfig {
     shutdown_threshold: u8,
+    #[serde(default = "default_cancel_margin")]
+    shutdown_cancel_margin: u8,
     min_valid_voltage: u32,
     max_valid_voltage: u32,
 }
@@ -102,6 +108,7 @@ impl Default for Config {
             },
             battery: BatteryConfig {
                 shutdown_threshold: 10,
+                shutdown_cancel_margin: 5,
                 min_valid_voltage: 8000,
                 max_valid_voltage: 26000,
             },
@@ -179,15 +186,19 @@ fn execute_shutdown_script(script_path: &str) -> Result<()> {
             .args(["-h", "now"])
             .spawn()
             .context("Failed to execute shutdown command")?;
-        return Ok(());
+    } else {
+        Command::new("sh")
+            .arg(script_path)
+            .spawn()
+            .with_context(|| format!("Failed to execute shutdown script: {}", script_path))?;
     }
 
-    Command::new("sh")
-        .arg(script_path)
-        .spawn()
-        .with_context(|| format!("Failed to execute shutdown script: {}", script_path))?;
-
-    Ok(())
+    // Wait indefinitely for system to shut down
+    // This prevents systemd from restarting the service before shutdown completes
+    info!("Waiting for system shutdown...");
+    loop {
+        thread::sleep(Duration::from_secs(60));
+    }
 }
 
 fn is_on_battery(vi: u32, min_valid_voltage: u32, max_valid_voltage: u32) -> bool {
@@ -218,8 +229,11 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
     let log_interval = Duration::from_secs(60); // Log status every 60 seconds
 
     info!(
-        "Monitoring started. Shutdown threshold: {}% SD when on battery (vi < {} or vi > {})",
-        config.battery.shutdown_threshold, config.battery.min_valid_voltage, config.battery.max_valid_voltage
+        "Monitoring started. Shutdown at SD<{}%, cancel at SD>={}% (vi range {}-{}mV)",
+        config.battery.shutdown_threshold,
+        config.battery.shutdown_threshold + config.battery.shutdown_cancel_margin,
+        config.battery.min_valid_voltage,
+        config.battery.max_valid_voltage
     );
 
     while running.load(Ordering::SeqCst) {
@@ -288,12 +302,17 @@ fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> 
                                     }
                                 }
                             }
-                        } else {
-                            // Conditions no longer met, cancel shutdown timer
-                            if shutdown_timer.is_some() {
+                        } else if shutdown_timer.is_some() {
+                            // Hysteresis: only cancel if power restored OR battery significantly recovered
+                            let cancel_threshold = config.battery.shutdown_threshold
+                                .saturating_add(config.battery.shutdown_cancel_margin);
+                            let battery_recovered = ups_data.sd >= cancel_threshold;
+                            let power_restored = !on_battery;
+
+                            if power_restored || battery_recovered {
                                 info!(
-                                    "Power restored or battery charged. Shutdown cancelled. \
-                                     SD={}%, VI={}mV",
+                                    "Shutdown cancelled: {}. SD={}%, VI={}mV",
+                                    if power_restored { "power restored" } else { "battery recovered" },
                                     ups_data.sd, ups_data.vi
                                 );
                                 shutdown_timer = None;
