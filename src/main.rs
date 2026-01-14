@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use serialport::SerialPortType;
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use signal_hook::consts::{SIGINT, SIGTERM};
@@ -103,7 +104,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             serial: SerialConfig {
-                port: "/dev/ttyACM0".to_string(),
+                port: "auto".to_string(),
                 baud_rate: 115200,
             },
             battery: BatteryConfig {
@@ -205,6 +206,21 @@ fn is_on_battery(vi: u32, min_valid_voltage: u32, max_valid_voltage: u32) -> boo
     vi < min_valid_voltage || vi > max_valid_voltage
 }
 
+/// Auto-detect Web3_Pi_UPS device by scanning USB serial ports
+fn detect_ups_port() -> Option<String> {
+    let ports = serialport::available_ports().ok()?;
+
+    for port in ports {
+        if let SerialPortType::UsbPort(usb_info) = port.port_type {
+            if usb_info.product.as_deref() == Some("Web3_Pi_UPS") {
+                return Some(port.port_name);
+            }
+        }
+    }
+
+    None
+}
+
 fn should_shutdown(ups_data: &UpsData, config: &BatteryConfig) -> bool {
     let low_battery = ups_data.sd < config.shutdown_threshold;
     let on_battery = is_on_battery(ups_data.vi, config.min_valid_voltage, config.max_valid_voltage);
@@ -212,15 +228,25 @@ fn should_shutdown(ups_data: &UpsData, config: &BatteryConfig) -> bool {
 }
 
 fn run_monitoring_loop(config: &Config, running: Arc<AtomicBool>) -> Result<()> {
+    // Resolve port path - auto-detect or use configured value
+    let port_path = if config.serial.port == "auto" {
+        info!("Auto-detecting Web3_Pi_UPS device...");
+        detect_ups_port().ok_or_else(|| {
+            anyhow!("Web3_Pi_UPS device not found. Check USB connection.")
+        })?
+    } else {
+        config.serial.port.clone()
+    };
+
     info!(
         "Opening serial port: {} at {} baud",
-        config.serial.port, config.serial.baud_rate
+        port_path, config.serial.baud_rate
     );
 
-    let port = serialport::new(&config.serial.port, config.serial.baud_rate)
+    let port = serialport::new(&port_path, config.serial.baud_rate)
         .timeout(Duration::from_secs(10))
         .open()
-        .with_context(|| format!("Failed to open serial port: {}", config.serial.port))?;
+        .with_context(|| format!("Failed to open serial port: {}", port_path))?;
 
     let mut reader = BufReader::new(port);
     let mut line = String::new();

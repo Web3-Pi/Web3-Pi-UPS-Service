@@ -2,8 +2,10 @@
 # Copy this file to /etc/w3p-ups/config.toml and adjust as needed
 
 [serial]
-# Serial port where the RP2040 Pico is connected
-port = "/dev/ttyACM0"
+# Serial port configuration
+# Use "auto" to automatically detect Web3_Pi_UPS device (recommended)
+# Or specify a path like "/dev/ttyACM0" to use a specific port
+port = "auto"
 # Baud rate for serial communication
 baud_rate = 115200
 
