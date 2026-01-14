@@ -19,6 +19,15 @@ shutdown_threshold = 10
 # Below this value, the system is considered to be running on battery
 min_valid_voltage = 8000
 
+# Maximum valid input voltage (in mV)
+# Above this value, the reading is considered invalid (sensor error)
+max_valid_voltage = 26000
+
+# Margin above shutdown_threshold required to cancel a pending shutdown
+# Prevents flapping when battery is near threshold
+# Default: 5 (shutdown at 10%, cancel at 15%)
+shutdown_cancel_margin = 5
+
 [shutdown]
 # Path to the shutdown script that will be executed
 # This script should handle graceful shutdown of your services
