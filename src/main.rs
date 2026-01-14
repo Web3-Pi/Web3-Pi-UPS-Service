@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context, Result};
-use serialport::SerialPortType;
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use signal_hook::consts::{SIGINT, SIGTERM};
@@ -206,14 +205,26 @@ fn is_on_battery(vi: u32, min_valid_voltage: u32, max_valid_voltage: u32) -> boo
     vi < min_valid_voltage || vi > max_valid_voltage
 }
 
-/// Auto-detect Web3_Pi_UPS device by scanning USB serial ports
+/// Auto-detect Web3_Pi_UPS device by scanning sysfs for ttyACM devices
 fn detect_ups_port() -> Option<String> {
-    let ports = serialport::available_ports().ok()?;
+    let tty_class = Path::new("/sys/class/tty");
 
-    for port in ports {
-        if let SerialPortType::UsbPort(usb_info) = port.port_type {
-            if usb_info.product.as_deref() == Some("Web3_Pi_UPS") {
-                return Some(port.port_name);
+    if let Ok(entries) = fs::read_dir(tty_class) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            // Only check ttyACM devices (CDC-ACM USB serial)
+            if !name_str.starts_with("ttyACM") {
+                continue;
+            }
+
+            // Read product name from sysfs: /sys/class/tty/ttyACMx/device/../product
+            let product_path = entry.path().join("device/../product");
+            if let Ok(product) = fs::read_to_string(&product_path) {
+                if product.trim() == "Web3_Pi_UPS" {
+                    return Some(format!("/dev/{}", name_str));
+                }
             }
         }
     }
