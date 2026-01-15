@@ -206,8 +206,17 @@ fn is_on_battery(vi: u32, min_valid_voltage: u32, max_valid_voltage: u32) -> boo
 }
 
 /// Auto-detect Web3_Pi_UPS device by scanning sysfs for ttyACM devices
+///
+/// Detection priority:
+/// 1. New firmware: product == "Web3_Pi_UPS"
+/// 2. Legacy firmware: Raspberry Pi Pico (RP2040 with default USB descriptors)
+/// 3. Fallback: First available ttyACM device
 fn detect_ups_port() -> Option<String> {
     let tty_class = Path::new("/sys/class/tty");
+
+    let mut web3_pi_ups: Option<String> = None;
+    let mut raspberry_pi_pico: Option<String> = None;
+    let mut first_ttyacm: Option<String> = None;
 
     if let Ok(entries) = fs::read_dir(tty_class) {
         for entry in entries.flatten() {
@@ -219,14 +228,48 @@ fn detect_ups_port() -> Option<String> {
                 continue;
             }
 
+            let device_path = format!("/dev/{}", name_str);
+
+            // Track first ttyACM as last resort fallback
+            if first_ttyacm.is_none() {
+                first_ttyacm = Some(device_path.clone());
+            }
+
             // Read product name from sysfs: /sys/class/tty/ttyACMx/device/../product
             let product_path = entry.path().join("device/../product");
             if let Ok(product) = fs::read_to_string(&product_path) {
-                if product.trim() == "Web3_Pi_UPS" {
-                    return Some(format!("/dev/{}", name_str));
+                let product = product.trim();
+
+                // Priority 1: New firmware with proper USB descriptors
+                if product == "Web3_Pi_UPS" {
+                    web3_pi_ups = Some(device_path.clone());
+                    debug!("Found Web3_Pi_UPS at {}", device_path);
+                }
+                // Priority 2: Legacy firmware (RP2040 with default "Pico" product)
+                else if product.contains("Pico") {
+                    if raspberry_pi_pico.is_none() {
+                        raspberry_pi_pico = Some(device_path.clone());
+                        debug!("Found Raspberry Pi Pico at {} (legacy firmware candidate)", device_path);
+                    }
                 }
             }
         }
+    }
+
+    // Return by priority
+    if let Some(port) = web3_pi_ups {
+        info!("Auto-detected Web3_Pi_UPS at {}", port);
+        return Some(port);
+    }
+
+    if let Some(port) = raspberry_pi_pico {
+        warn!("Web3_Pi_UPS not found, using Raspberry Pi Pico at {} (legacy firmware)", port);
+        return Some(port);
+    }
+
+    if let Some(port) = first_ttyacm {
+        warn!("No known UPS device found, trying first ttyACM device: {}", port);
+        return Some(port);
     }
 
     None
