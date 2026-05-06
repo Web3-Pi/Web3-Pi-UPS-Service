@@ -1,9 +1,9 @@
 [package]
 name = "w3p-ups"
-version = "1.0.0"
+version = "2.0.0-alpha.1"
 edition = "2021"
 authors = ["Web3-Pi Team"]
-description = "UPS monitoring service for Web3 Pi - monitors battery status and initiates graceful shutdown"
+description = "Web3 Pi UPS agent — bidirectional protocol agent, host metrics, graceful shutdown"
 license = "MIT"
 repository = "https://github.com/Web3-Pi/Web3-Pi-UPS-Service"
 readme = "README.md"
@@ -11,14 +11,18 @@ keywords = ["ups", "raspberry-pi", "battery", "monitoring", "systemd"]
 categories = ["command-line-utilities", "hardware-support"]
 
 [dependencies]
-serialport = "4.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "signal", "sync", "time", "process", "fs"] }
+tokio-serial = "5.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
-log = "0.4"
-simplelog = "0.12"
-signal-hook = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi", "smallvec", "tracing-log"] }
+tracing-journald = "0.3"
+clap = { version = "4", features = ["derive"] }
 anyhow = "1.0"
+thiserror = "2.0"
+libc = "0.2"
 
 [profile.release]
 opt-level = "z"     # Optimize for size

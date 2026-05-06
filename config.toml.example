@@ -1,49 +1,51 @@
-# Web3 Pi UPS Service Configuration
-# Copy this file to /etc/w3p-ups/config.toml and adjust as needed
+# Web3 Pi UPS Service Configuration (v2)
+# Install at /etc/w3p-ups/config.toml.
 
 [serial]
-# Serial port configuration
-# Use "auto" to automatically detect Web3_Pi_UPS device (recommended)
-# Or specify a path like "/dev/ttyACM0" to use a specific port
+# "auto" detects the Web3_Pi_UPS USB device, or specify a path like "/dev/ttyACM0".
 port = "auto"
-# Baud rate for serial communication
 baud_rate = 115200
 
 [battery]
-# Battery SOC (State of Charge) percentage below which shutdown is triggered
-# Shutdown only occurs when BOTH conditions are met:
-# 1. SOC is below this threshold
-# 2. Input voltage indicates we're running on battery (vi < min_valid_voltage)
-shutdown_threshold = 10
-
-# Minimum input voltage (in mV) to consider grid power as connected
-# Values 8000-21000 typically indicate grid power is present
-# Below this value, the system is considered to be running on battery
-min_valid_voltage = 8000
-
-# Maximum valid input voltage (in mV)
-# Above this value, the reading is considered invalid (sensor error)
-max_valid_voltage = 26000
-
-# Margin above shutdown_threshold required to cancel a pending shutdown
-# Prevents flapping when battery is near threshold
-# Default: 5 (shutdown at 10%, cancel at 15%)
-shutdown_cancel_margin = 5
+# Critical SOC (percent) below which shutdown is initiated, when on battery.
+shutdown_threshold_pct = 10
+# Margin above the threshold required to cancel a pending shutdown (anti-flap).
+shutdown_cancel_margin_pct = 5
+# Battery voltage at 0% SOC (mV). Linear interpolation up to full.
+voltage_at_zero_pct = 6000
+# Battery voltage at 100% SOC (mV).
+voltage_at_full_pct = 8400
+# Input (PD) voltage range that indicates the grid is connected. Outside → on battery.
+input_min_valid_mv = 8000
+input_max_valid_mv = 26000
 
 [shutdown]
-# Path to the shutdown script that will be executed
-# This script should handle graceful shutdown of your services
+# Path to the script run when shutdown is triggered.
 script_path = "/etc/w3p-ups/shutdown.sh"
-
-# Delay in seconds before executing shutdown after low battery is detected
-# This gives time for power to potentially be restored
-# If power is restored during this period, shutdown is cancelled
+# Grace period (seconds) between low-battery detection and shutdown.
 delay_seconds = 30
 
-[logging]
-# Log level: trace, debug, info, warn, error
-level = "info"
+[host_metrics]
+# Period between host.status emissions to RP2040 (seconds). 0 disables.
+interval_seconds = 5
 
-# Optional path for file logging (in addition to journald)
-# Leave empty or comment out to log only to journald
-# file_path = "/var/log/w3p-ups.log"
+[commands]
+# Master kill switch for `host.service.restart` REQs.
+allow_service_restart = true
+# Whitelist of systemd unit names (without `.service`) allowed to be restarted.
+service_whitelist = [
+    "w3p_geth",
+    "w3p_nimbus-beacon",
+    "w3p_lighthouse-beacon",
+    "nimbus-validator",
+]
+
+[ipc]
+# Local Unix domain socket for read-only state queries (CLI / future LCD plugin).
+socket_path = "/run/w3p-ups/agent.sock"
+
+[logging]
+# trace | debug | info | warn | error
+level = "info"
+# Emit logs through journald in addition to stderr (set true on systemd hosts).
+journald = false
