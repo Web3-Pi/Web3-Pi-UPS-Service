@@ -30,17 +30,16 @@ pub struct SerialConfig {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields)]
+// Tolerate extra keys here so a v2.0.0 config (which had
+// `voltage_at_zero_pct` / `voltage_at_full_pct`) keeps parsing on v2.0.1.
+// The SOC curve is now a hardcoded LUT (see [`crate::soc`]) — those config
+// knobs would be misleading if kept.
 pub struct BatteryConfig {
     /// SOC% below which shutdown is initiated (when on battery).
     pub shutdown_threshold_pct: u8,
     /// Margin above threshold required to cancel a pending shutdown.
     #[serde(default = "default_cancel_margin")]
     pub shutdown_cancel_margin_pct: u8,
-    /// Battery voltage at 0% SOC (mV). Linear interpolation up to full.
-    pub voltage_at_zero_pct: u16,
-    /// Battery voltage at 100% SOC (mV).
-    pub voltage_at_full_pct: u16,
     /// Input (PD) voltage range considered "on grid". Outside this → on battery.
     pub input_min_valid_mv: u16,
     pub input_max_valid_mv: u16,
@@ -137,8 +136,6 @@ impl Default for Config {
             battery: BatteryConfig {
                 shutdown_threshold_pct: 10,
                 shutdown_cancel_margin_pct: 5,
-                voltage_at_zero_pct: 6000,
-                voltage_at_full_pct: 8400,
                 input_min_valid_mv: 8000,
                 input_max_valid_mv: 26000,
             },

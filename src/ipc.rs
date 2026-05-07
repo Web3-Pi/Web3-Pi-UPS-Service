@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 use crate::proto::payloads::{HostStatusV1, NetStatusV1, PowerStatusV1};
+use crate::soc::pack_mv_to_soc_pct;
 use crate::state::{AgentState, State};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -96,14 +97,9 @@ struct HostSnapshot {
 }
 
 /// Spawn the IPC listener on `socket_path`. Returns the listener task handle.
-///
-/// SOC computation thresholds are passed in so snapshots show the same value
-/// the SM uses for shutdown decisions.
 pub async fn spawn_ipc(
     socket_path: String,
     state: Arc<State>,
-    soc_zero_mv: u16,
-    soc_full_mv: u16,
     on_batt_min_mv: u16,
     on_batt_max_mv: u16,
 ) -> Result<tokio::task::JoinHandle<()>> {
@@ -124,25 +120,21 @@ pub async fn spawn_ipc(
     let handle = tokio::spawn(accept_loop(
         listener,
         state,
-        SocCfg {
-            soc_zero_mv,
-            soc_full_mv,
-            on_batt_min_mv,
-            on_batt_max_mv,
+        OnBattCfg {
+            min_mv: on_batt_min_mv,
+            max_mv: on_batt_max_mv,
         },
     ));
     Ok(handle)
 }
 
 #[derive(Clone, Copy)]
-struct SocCfg {
-    soc_zero_mv: u16,
-    soc_full_mv: u16,
-    on_batt_min_mv: u16,
-    on_batt_max_mv: u16,
+struct OnBattCfg {
+    min_mv: u16,
+    max_mv: u16,
 }
 
-async fn accept_loop(listener: UnixListener, state: Arc<State>, cfg: SocCfg) {
+async fn accept_loop(listener: UnixListener, state: Arc<State>, cfg: OnBattCfg) {
     loop {
         match listener.accept().await {
             Ok((stream, _addr)) => {
@@ -157,7 +149,7 @@ async fn accept_loop(listener: UnixListener, state: Arc<State>, cfg: SocCfg) {
     }
 }
 
-async fn handle_client(stream: UnixStream, state: Arc<State>, cfg: SocCfg) {
+async fn handle_client(stream: UnixStream, state: Arc<State>, cfg: OnBattCfg) {
     let (rd, mut wr) = stream.into_split();
     let mut reader = BufReader::new(rd).lines();
     let (tick_tx, mut tick_rx) = mpsc::channel::<()>(4);
@@ -213,7 +205,7 @@ async fn handle_client(stream: UnixStream, state: Arc<State>, cfg: SocCfg) {
     debug!("IPC client disconnected");
 }
 
-async fn send_snapshot(wr: &mut tokio::net::unix::OwnedWriteHalf, state: &State, cfg: &SocCfg) {
+async fn send_snapshot(wr: &mut tokio::net::unix::OwnedWriteHalf, state: &State, cfg: &OnBattCfg) {
     let snap = state.snapshot().await;
     let msg = build_snapshot(&snap, cfg);
     send_reply(wr, &Reply::Snapshot(msg)).await;
@@ -235,7 +227,7 @@ async fn send_reply(wr: &mut tokio::net::unix::OwnedWriteHalf, reply: &Reply) {
     let _ = wr.flush().await;
 }
 
-fn build_snapshot(snap: &AgentState, cfg: &SocCfg) -> SnapshotMsg {
+fn build_snapshot(snap: &AgentState, cfg: &OnBattCfg) -> SnapshotMsg {
     let now = Instant::now();
     let unix_ts_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -258,10 +250,14 @@ fn build_snapshot(snap: &AgentState, cfg: &SocCfg) -> SnapshotMsg {
     }
 }
 
-fn make_power(p: PowerStatusV1, at: Option<Instant>, now: Instant, cfg: &SocCfg) -> PowerSnapshot {
-    let soc_pct = crate::shutdown_sm::compute_soc_pct(p.vbat_mv, cfg.soc_zero_mv, cfg.soc_full_mv);
-    let on_battery =
-        crate::shutdown_sm::is_on_battery(p.vbus_in_mv, cfg.on_batt_min_mv, cfg.on_batt_max_mv);
+fn make_power(
+    p: PowerStatusV1,
+    at: Option<Instant>,
+    now: Instant,
+    cfg: &OnBattCfg,
+) -> PowerSnapshot {
+    let soc_pct = pack_mv_to_soc_pct(p.vbat_mv);
+    let on_battery = crate::shutdown_sm::is_on_battery(p.vbus_in_mv, cfg.min_mv, cfg.max_mv);
     PowerSnapshot {
         age_ms: at.map(|t| now.saturating_duration_since(t).as_millis() as u64),
         charge_state: p.charge_state,

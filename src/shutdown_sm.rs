@@ -10,24 +10,9 @@ use tracing::{error, info, warn};
 use crate::config::{BatteryConfig, ShutdownConfig};
 use crate::proto::payloads::{host_event, host_shutdown_reason, HostEventV1, HostShutdownV1};
 use crate::proto::{addr, class, flag, op, Frame};
+use crate::soc::pack_mv_to_soc_pct;
 use crate::state::State;
 use crate::transport::OutboundFrame;
-
-/// Compute SOC% from battery voltage with linear interpolation.
-pub fn compute_soc_pct(vbat_mv: u16, zero_at: u16, full_at: u16) -> u8 {
-    if full_at <= zero_at {
-        return 0;
-    }
-    if vbat_mv <= zero_at {
-        return 0;
-    }
-    if vbat_mv >= full_at {
-        return 100;
-    }
-    let range = (full_at - zero_at) as u32;
-    let above = (vbat_mv - zero_at) as u32;
-    ((above * 100) / range) as u8
-}
 
 /// Whether the input voltage indicates we are running on battery.
 pub fn is_on_battery(vbus_in_mv: u16, min: u16, max: u16) -> bool {
@@ -71,11 +56,7 @@ async fn step(
         return false;
     };
 
-    let soc = compute_soc_pct(
-        power.vbat_mv,
-        battery.voltage_at_zero_pct,
-        battery.voltage_at_full_pct,
-    );
+    let soc = pack_mv_to_soc_pct(power.vbat_mv);
     let on_batt = is_on_battery(
         power.vbus_in_mv,
         battery.input_min_valid_mv,
@@ -208,34 +189,6 @@ async fn wait_forever() -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn soc_at_endpoints() {
-        assert_eq!(compute_soc_pct(6000, 6000, 8400), 0);
-        assert_eq!(compute_soc_pct(8400, 6000, 8400), 100);
-    }
-
-    #[test]
-    fn soc_clamped_below_zero() {
-        assert_eq!(compute_soc_pct(5000, 6000, 8400), 0);
-    }
-
-    #[test]
-    fn soc_clamped_above_full() {
-        assert_eq!(compute_soc_pct(9000, 6000, 8400), 100);
-    }
-
-    #[test]
-    fn soc_midpoint() {
-        // (8400 - 6000) / 2 = 1200 above floor → 50%
-        assert_eq!(compute_soc_pct(7200, 6000, 8400), 50);
-    }
-
-    #[test]
-    fn soc_invalid_range_returns_zero() {
-        assert_eq!(compute_soc_pct(7000, 8400, 6000), 0);
-        assert_eq!(compute_soc_pct(7000, 7000, 7000), 0);
-    }
 
     #[test]
     fn on_battery_below_min() {

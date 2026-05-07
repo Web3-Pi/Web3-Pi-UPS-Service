@@ -8,13 +8,11 @@ baud_rate = 115200
 
 [battery]
 # Critical SOC (percent) below which shutdown is initiated, when on battery.
+# SOC is computed from a hardcoded LUT for the 2S Panasonic CGR18650CH pack
+# used in the Web3 Pi UPS — same curve as the OLED on the device.
 shutdown_threshold_pct = 10
 # Margin above the threshold required to cancel a pending shutdown (anti-flap).
 shutdown_cancel_margin_pct = 5
-# Battery voltage at 0% SOC (mV). Linear interpolation up to full.
-voltage_at_zero_pct = 6000
-# Battery voltage at 100% SOC (mV).
-voltage_at_full_pct = 8400
 # Input (PD) voltage range that indicates the grid is connected. Outside → on battery.
 input_min_valid_mv = 8000
 input_max_valid_mv = 26000

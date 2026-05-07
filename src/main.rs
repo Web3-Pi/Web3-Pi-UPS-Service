@@ -7,6 +7,7 @@ mod ipc;
 mod logging;
 mod proto;
 mod shutdown_sm;
+mod soc;
 mod state;
 mod transport;
 
@@ -77,8 +78,6 @@ async fn run_daemon(cfg: config::Config) -> Result<()> {
     let ipc_handle = match ipc::spawn_ipc(
         cfg.ipc.socket_path.clone(),
         state.clone(),
-        cfg.battery.voltage_at_zero_pct,
-        cfg.battery.voltage_at_full_pct,
         cfg.battery.input_min_valid_mv,
         cfg.battery.input_max_valid_mv,
     )
