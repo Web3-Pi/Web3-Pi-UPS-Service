@@ -1,6 +1,6 @@
 [package]
 name = "w3p-ups"
-version = "2.0.0-alpha.1"
+version = "2.0.0"
 edition = "2021"
 authors = ["Web3-Pi Team"]
 description = "Web3 Pi UPS agent — bidirectional protocol agent, host metrics, graceful shutdown"
