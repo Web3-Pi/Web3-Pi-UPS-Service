@@ -25,7 +25,8 @@ delay_seconds = 30
 
 [host_metrics]
 # Period between host.status emissions to RP2040 (seconds). 0 disables.
-interval_seconds = 5
+# 30 s keeps the LTE uplink inside the ~500 MB/mo data plan.
+interval_seconds = 30
 
 [commands]
 # Master kill switch for `host.service.restart` REQs.

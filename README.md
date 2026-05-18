@@ -65,7 +65,7 @@ script_path = "/etc/w3p-ups/shutdown.sh"
 delay_seconds = 30                 # Grace period before shutdown
 
 [host_metrics]
-interval_seconds = 5               # Period between host.status emissions to the UPS. 0 disables.
+interval_seconds = 30              # Period between host.status emissions to the UPS. 0 disables.
 
 [commands]
 allow_service_restart = true       # Master switch for host.service.restart REQs from the device

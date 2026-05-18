@@ -89,8 +89,13 @@ fn default_cancel_margin() -> u8 {
 
 impl Default for HostMetricsConfig {
     fn default() -> Self {
+        // 30 s, sized against the M.2 modem's ~500 MB/mo LTE data plan
+        // (measured per-frame packet size). 0 disables. Host metrics only
+        // reach the backend when this service is running on the Pi — if the
+        // Pi is not connected over USB, no host.status frames are produced
+        // and the RP2040 has nothing to relay.
         Self {
-            interval_seconds: 5,
+            interval_seconds: 30,
         }
     }
 }
