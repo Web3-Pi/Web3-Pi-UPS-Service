@@ -229,6 +229,109 @@ pub mod power_fault {
     pub const PD_NEG: u16 = 1 << 3;
 }
 
+/// `power.status` v2 — `wups_power_status_v2_t`. 40 bytes, version byte = 2.
+///
+/// A redesign of v1 (not a prefix-compatible superset): the dispatcher picks
+/// the decoder by the version byte. v2 separates INPUT (HUSB238) and OUTPUT
+/// PD contracts, exposes real `vsys_mv`/`iin_ma` (v1 aliased these onto
+/// `pd_contract_*`), splits the two temperatures, and packs booleans into
+/// `flags`. The host currently down-converts v2 to `PowerStatusV1` for
+/// storage (see `to_v1`); native v2 exposure is a later step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PowerStatusV2 {
+    pub flags: u8,         // WUPS_PWR2_FLAG_*
+    pub charge_state: u8,
+    pub vbus_in_mv: u16,
+    pub pd_in_mv: u16,     // HUSB238 negotiated input; 0 = N/A
+    pub pd_in_ma: u16,
+    pub vbus_out_mv: u16,  // PA0 ADC
+    pub vout_set_mv: u16,
+    pub vout_read_mv: u16,
+    pub iout_limit_ma: u16, // current LIMIT, not a load measurement
+    pub pd_out_mv: u16,    // output PD contract to the Pi; 0 = rail off
+    pub pd_out_ma: u16,
+    pub vbat_mv: u16,
+    pub ichg_ma: i16,      // charge current; 0 on discharge
+    pub vsys_mv: u16,
+    pub iin_ma: u16,
+    pub temp_lm_dc: i16,
+    pub temp_mp_dc: i16,   // -32768 = MP2762A unpowered (N/A)
+    pub faults: u16,
+    pub uptime_s: u32,
+}
+
+/// `flags` bit positions for `PowerStatusV2`.
+pub mod power2_flag {
+    pub const DC_IN_EN: u8 = 1 << 0;
+    pub const VBUS_OUT_EN: u8 = 1 << 1;
+    pub const BATT_PRESENT: u8 = 1 << 2;
+    pub const POWER_GOOD: u8 = 1 << 3;
+    pub const USB_C_ATTACH: u8 = 1 << 4;
+}
+
+impl PowerStatusV2 {
+    pub const WIRE_LEN: usize = 40;
+    pub const VERSION: u8 = 2;
+
+    pub fn decode(buf: &[u8]) -> Result<Self, PayloadError> {
+        check_fixed_len(buf, Self::WIRE_LEN)?;
+        if buf[0] != Self::VERSION {
+            return Err(PayloadError::UnsupportedVersion {
+                got: buf[0],
+                expected: Self::VERSION,
+            });
+        }
+        let u16le = |i: usize| u16::from_le_bytes([buf[i], buf[i + 1]]);
+        let i16le = |i: usize| i16::from_le_bytes([buf[i], buf[i + 1]]);
+        Ok(Self {
+            flags: buf[1],
+            charge_state: buf[2],
+            // buf[3] = reserved
+            vbus_in_mv: u16le(4),
+            pd_in_mv: u16le(6),
+            pd_in_ma: u16le(8),
+            vbus_out_mv: u16le(10),
+            vout_set_mv: u16le(12),
+            vout_read_mv: u16le(14),
+            iout_limit_ma: u16le(16),
+            pd_out_mv: u16le(18),
+            pd_out_ma: u16le(20),
+            vbat_mv: u16le(22),
+            ichg_ma: i16le(24),
+            vsys_mv: u16le(26),
+            iin_ma: u16le(28),
+            temp_lm_dc: i16le(30),
+            temp_mp_dc: i16le(32),
+            faults: u16le(34),
+            uptime_s: u32::from_le_bytes([buf[36], buf[37], buf[38], buf[39]]),
+        })
+    }
+
+    /// Down-convert to the legacy `PowerStatusV1` the rest of the host still
+    /// consumes. Preserves the v1 host's existing semantics: `pd_contract_*`
+    /// carried VSYS/IIN, `vbus_out`/`ibus_out` carried the TPS readback/limit,
+    /// `temp_dc` was the hotter of the two sensors.
+    pub fn to_v1(&self) -> PowerStatusV1 {
+        let temp_dc = if self.temp_mp_dc == i16::MIN {
+            self.temp_lm_dc
+        } else {
+            self.temp_lm_dc.max(self.temp_mp_dc)
+        };
+        PowerStatusV1 {
+            charge_state: self.charge_state,
+            vbus_in_mv: self.vbus_in_mv,
+            vbus_out_mv: self.vout_read_mv,
+            ibus_out_ma: self.iout_limit_ma as i16,
+            vbat_mv: self.vbat_mv,
+            ibat_ma: self.ichg_ma,
+            temp_dc,
+            pd_contract_mv: self.vsys_mv,
+            pd_contract_ma: self.iin_ma,
+            faults: self.faults,
+        }
+    }
+}
+
 /// `power.cycle` REQ — `wups_power_cycle_v1_t`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PowerCycleV1 {
@@ -827,6 +930,81 @@ mod tests {
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             ]
         );
+    }
+
+    #[test]
+    fn power_status_v2_known_bytes() {
+        // 40-byte v2 frame with a distinct value per field so any offset swap
+        // is caught. Locks the four-way wire contract (CH32X / RP2040 / Rust).
+        let bytes: [u8; 40] = [
+            0x02, 0x1F, 0x02, 0x00, // version, flags(all 5), charge_state, reserved
+            0x20, 0x4E,             // vbus_in_mV   = 20000
+            0x98, 0x3A,             // pd_in_mV     = 15000
+            0xD6, 0x06,             // pd_in_mA     = 1750
+            0xEC, 0x13,             // vbus_out_mV  = 5100
+            0xEC, 0x13,             // vout_set_mV  = 5100
+            0xBA, 0x13,             // vout_read_mV = 5050
+            0x88, 0x13,             // iout_limit_mA= 5000
+            0x88, 0x13,             // pd_out_mV    = 5000
+            0x88, 0x13,             // pd_out_mA    = 5000
+            0xD0, 0x20,             // vbat_mV      = 8400
+            0x06, 0xFF,             // ichg_mA      = -250
+            0xFC, 0x21,             // vsys_mV      = 8700
+            0xF4, 0x01,             // iin_mA       = 500
+            0xFD, 0x00,             // temp_lm_dC   = 253
+            0x00, 0x80,             // temp_mp_dC   = -32768 (N/A)
+            0x00, 0x07,             // faults       = 0x0700 (TPS SCP/OCP/OVP)
+            0x40, 0xE2, 0x01, 0x00, // uptime_s     = 123456
+        ];
+        let p = PowerStatusV2::decode(&bytes).expect("decode v2");
+        assert_eq!(p.flags, 0x1F);
+        assert_eq!(p.charge_state, 2);
+        assert_eq!(p.vbus_in_mv, 20000);
+        assert_eq!(p.pd_in_mv, 15000);
+        assert_eq!(p.pd_in_ma, 1750);
+        assert_eq!(p.vbus_out_mv, 5100);
+        assert_eq!(p.vout_set_mv, 5100);
+        assert_eq!(p.vout_read_mv, 5050);
+        assert_eq!(p.iout_limit_ma, 5000);
+        assert_eq!(p.pd_out_mv, 5000);
+        assert_eq!(p.pd_out_ma, 5000);
+        assert_eq!(p.vbat_mv, 8400);
+        assert_eq!(p.ichg_ma, -250);
+        assert_eq!(p.vsys_mv, 8700);
+        assert_eq!(p.iin_ma, 500);
+        assert_eq!(p.temp_lm_dc, 253);
+        assert_eq!(p.temp_mp_dc, i16::MIN);
+        assert_eq!(p.faults, 0x0700);
+        assert_eq!(p.uptime_s, 123456);
+
+        // to_v1() mapping: VSYS/IIN -> pd_contract_*, vout_read -> vbus_out,
+        // iout_limit -> ibus_out, temp_dc = LM (MP is N/A sentinel).
+        let v1 = p.to_v1();
+        assert_eq!(v1.charge_state, 2);
+        assert_eq!(v1.vbus_in_mv, 20000);
+        assert_eq!(v1.vbus_out_mv, 5050);
+        assert_eq!(v1.ibus_out_ma, 5000);
+        assert_eq!(v1.vbat_mv, 8400);
+        assert_eq!(v1.ibat_ma, -250);
+        assert_eq!(v1.temp_dc, 253); // LM only, MP unpowered
+        assert_eq!(v1.pd_contract_mv, 8700); // VSYS
+        assert_eq!(v1.pd_contract_ma, 500); // IIN
+        assert_eq!(v1.faults, 0x0700);
+    }
+
+    #[test]
+    fn power_status_v2_rejects_bad_version_and_len() {
+        let mut buf = [0u8; 40];
+        buf[0] = 1; // wrong version in a correct-length buffer
+        assert!(matches!(
+            PowerStatusV2::decode(&buf),
+            Err(PayloadError::UnsupportedVersion { .. })
+        ));
+        let short = [2u8; 20];
+        assert!(matches!(
+            PowerStatusV2::decode(&short),
+            Err(PayloadError::UnexpectedLength { .. })
+        ));
     }
 
     #[test]
