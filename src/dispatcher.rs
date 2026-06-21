@@ -5,7 +5,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::commands::CommandsHandler;
 use crate::proto::payloads::{
-    HostEventV1, NetStatusV1, PowerEventV1, PowerStatusV1, SysHelloV1, SysLogV1,
+    HostEventV1, NetStatusV1, PowerEventV1, PowerStatusV1, PowerStatusV2, SysHelloV1, SysLogV1,
 };
 use crate::proto::{addr, class, flag, op, Frame};
 use crate::state::State;
@@ -70,20 +70,28 @@ async fn handle(
         }
 
         // ---- POWER ----
-        (class::POWER, op::power::STATUS) => match PowerStatusV1::decode(&frame.payload) {
-            Ok(p) => {
-                debug!(
-                    vbus_in_mv = p.vbus_in_mv,
-                    vbat_mv = p.vbat_mv,
-                    ibat_ma = p.ibat_ma,
-                    charge_state = p.charge_state,
-                    faults = format!("{:#06x}", p.faults),
-                    "power.status"
-                );
-                state.update_power(p).await;
+        (class::POWER, op::power::STATUS) => {
+            // Dispatch on the version byte: v2 is decoded then down-converted
+            // to v1 for storage (host stays v1-native for now); v1 as before.
+            let decoded = match frame.payload.first().copied() {
+                Some(2) => PowerStatusV2::decode(&frame.payload).map(|p2| p2.to_v1()),
+                _ => PowerStatusV1::decode(&frame.payload),
+            };
+            match decoded {
+                Ok(p) => {
+                    debug!(
+                        vbus_in_mv = p.vbus_in_mv,
+                        vbat_mv = p.vbat_mv,
+                        ibat_ma = p.ibat_ma,
+                        charge_state = p.charge_state,
+                        faults = format!("{:#06x}", p.faults),
+                        "power.status"
+                    );
+                    state.update_power(p).await;
+                }
+                Err(e) => warn!("power.status decode: {e}"),
             }
-            Err(e) => warn!("power.status decode: {e}"),
-        },
+        }
         (class::POWER, op::power::EVENT) => match PowerEventV1::decode(&frame.payload) {
             Ok(e) => {
                 info!(event = e.event, "power.event");
