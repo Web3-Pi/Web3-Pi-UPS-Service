@@ -239,23 +239,23 @@ pub mod power_fault {
 /// storage (see `to_v1`); native v2 exposure is a later step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PowerStatusV2 {
-    pub flags: u8,         // WUPS_PWR2_FLAG_*
+    pub flags: u8, // WUPS_PWR2_FLAG_*
     pub charge_state: u8,
     pub vbus_in_mv: u16,
-    pub pd_in_mv: u16,     // HUSB238 negotiated input; 0 = N/A
+    pub pd_in_mv: u16, // HUSB238 negotiated input; 0 = N/A
     pub pd_in_ma: u16,
-    pub vbus_out_mv: u16,  // PA0 ADC
+    pub vbus_out_mv: u16, // PA0 ADC
     pub vout_set_mv: u16,
     pub vout_read_mv: u16,
     pub iout_limit_ma: u16, // current LIMIT, not a load measurement
-    pub pd_out_mv: u16,    // output PD contract to the Pi; 0 = rail off
+    pub pd_out_mv: u16,     // output PD contract to the Pi; 0 = rail off
     pub pd_out_ma: u16,
     pub vbat_mv: u16,
-    pub ichg_ma: i16,      // charge current; 0 on discharge
+    pub ichg_ma: i16, // charge current; 0 on discharge
     pub vsys_mv: u16,
     pub iin_ma: u16,
     pub temp_lm_dc: i16,
-    pub temp_mp_dc: i16,   // -32768 = MP2762A unpowered (N/A)
+    pub temp_mp_dc: i16, // -32768 = MP2762A unpowered (N/A)
     pub faults: u16,
     pub uptime_s: u32,
 }
@@ -938,22 +938,22 @@ mod tests {
         // is caught. Locks the four-way wire contract (CH32X / RP2040 / Rust).
         let bytes: [u8; 40] = [
             0x02, 0x1F, 0x02, 0x00, // version, flags(all 5), charge_state, reserved
-            0x20, 0x4E,             // vbus_in_mV   = 20000
-            0x98, 0x3A,             // pd_in_mV     = 15000
-            0xD6, 0x06,             // pd_in_mA     = 1750
-            0xEC, 0x13,             // vbus_out_mV  = 5100
-            0xEC, 0x13,             // vout_set_mV  = 5100
-            0xBA, 0x13,             // vout_read_mV = 5050
-            0x88, 0x13,             // iout_limit_mA= 5000
-            0x88, 0x13,             // pd_out_mV    = 5000
-            0x88, 0x13,             // pd_out_mA    = 5000
-            0xD0, 0x20,             // vbat_mV      = 8400
-            0x06, 0xFF,             // ichg_mA      = -250
-            0xFC, 0x21,             // vsys_mV      = 8700
-            0xF4, 0x01,             // iin_mA       = 500
-            0xFD, 0x00,             // temp_lm_dC   = 253
-            0x00, 0x80,             // temp_mp_dC   = -32768 (N/A)
-            0x00, 0x07,             // faults       = 0x0700 (TPS SCP/OCP/OVP)
+            0x20, 0x4E, // vbus_in_mV   = 20000
+            0x98, 0x3A, // pd_in_mV     = 15000
+            0xD6, 0x06, // pd_in_mA     = 1750
+            0xEC, 0x13, // vbus_out_mV  = 5100
+            0xEC, 0x13, // vout_set_mV  = 5100
+            0xBA, 0x13, // vout_read_mV = 5050
+            0x88, 0x13, // iout_limit_mA= 5000
+            0x88, 0x13, // pd_out_mV    = 5000
+            0x88, 0x13, // pd_out_mA    = 5000
+            0xD0, 0x20, // vbat_mV      = 8400
+            0x06, 0xFF, // ichg_mA      = -250
+            0xFC, 0x21, // vsys_mV      = 8700
+            0xF4, 0x01, // iin_mA       = 500
+            0xFD, 0x00, // temp_lm_dC   = 253
+            0x00, 0x80, // temp_mp_dC   = -32768 (N/A)
+            0x00, 0x07, // faults       = 0x0700 (TPS SCP/OCP/OVP)
             0x40, 0xE2, 0x01, 0x00, // uptime_s     = 123456
         ];
         let p = PowerStatusV2::decode(&bytes).expect("decode v2");
