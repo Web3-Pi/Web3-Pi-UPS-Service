@@ -311,7 +311,7 @@ impl PowerStatusV2 {
     /// consumes. Preserves the v1 host's existing semantics: `pd_contract_*`
     /// carried VSYS/IIN, `vbus_out`/`ibus_out` carried the TPS readback/limit,
     /// `temp_dc` was the hotter of the two sensors.
-    pub fn to_v1(&self) -> PowerStatusV1 {
+    pub fn to_v1(self) -> PowerStatusV1 {
         let temp_dc = if self.temp_mp_dc == i16::MIN {
             self.temp_lm_dc
         } else {
