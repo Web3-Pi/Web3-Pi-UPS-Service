@@ -277,7 +277,10 @@ fn print_host_block(s: &SnapshotMsg) {
     };
     row("network", &format!("{net_rate}   {net_total}"));
 
-    row("ethereum", eth_client_state_name(h.eth_client_state));
+    let (eth_exec, eth_cons, eth_val) = crate::host_metrics::eth::unpack(h.eth_client_state);
+    row("eth execution", crate::host_metrics::eth::state_name(eth_exec));
+    row("eth consensus", crate::host_metrics::eth::state_name(eth_cons));
+    row("eth validator", crate::host_metrics::eth::state_name(eth_val));
 }
 
 fn row(label: &str, value: &str) {
@@ -355,15 +358,7 @@ fn fmt_bytes(b: u64) -> String {
     }
 }
 
-fn eth_client_state_name(s: u8) -> &'static str {
-    match s {
-        0 => "stopped",
-        1 => "syncing",
-        2 => "synced",
-        3 => "error",
-        _ => "?",
-    }
-}
+// eth client state is now decoded via host_metrics::eth::{unpack, state_name}.
 
 fn charge_state_name(s: u8) -> &'static str {
     match s {

@@ -39,6 +39,17 @@ service_whitelist = [
     "nimbus-validator",
 ]
 
+[eth_clients]
+# systemd units monitored for per-client SERVICE state (running/stopped/failed)
+# — surfaced in the web panel "ETH Clients" tiles. We report the unit state only,
+# NOT chain sync (synced/syncing). Empty string disables a role. The three states
+# are packed into the single host.status eth_client_state byte (no wire change).
+# Defaults = stock Web3-Pi-vOS units (geth + nimbus); change for other client
+# combos (reth/besu execution, lighthouse/teku consensus, …).
+execution = "geth"
+consensus = "nimbus-beacon-node"
+validator = "nimbus-validator"
+
 [ipc]
 # Local Unix domain socket for read-only state queries (CLI / future LCD plugin).
 socket_path = "/run/w3p-ups/agent.sock"

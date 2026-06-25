@@ -16,6 +16,8 @@ pub struct Config {
     #[serde(default)]
     pub commands: CommandsConfig,
     #[serde(default)]
+    pub eth_clients: EthClientsConfig,
+    #[serde(default)]
     pub ipc: IpcConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
@@ -68,6 +70,20 @@ pub struct CommandsConfig {
     pub service_whitelist: Vec<String>,
 }
 
+/// systemd unit names for the three Ethereum-client roles the agent monitors.
+/// We report the unit's *service* state (running/stopped/failed) only — never
+/// chain sync status. An empty string disables monitoring for that role.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields, default)]
+pub struct EthClientsConfig {
+    /// Execution-layer client unit (e.g. `geth`, `reth`, `besu`).
+    pub execution: String,
+    /// Consensus-layer / beacon client unit (e.g. `nimbus-beacon-node`, `lighthouse-beacon`).
+    pub consensus: String,
+    /// Validator client unit (e.g. `nimbus-validator`).
+    pub validator: String,
+}
+
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields, default)]
 pub struct IpcConfig {
@@ -114,6 +130,19 @@ impl Default for CommandsConfig {
     }
 }
 
+impl Default for EthClientsConfig {
+    fn default() -> Self {
+        // Stock Web3-Pi-vOS units (geth + nimbus). Override per-deployment for
+        // other client combos (reth/besu, lighthouse/teku, …). `systemctl
+        // is-active` resolves the `.service` suffix, so bare names are fine.
+        Self {
+            execution: "geth".into(),
+            consensus: "nimbus-beacon-node".into(),
+            validator: "nimbus-validator".into(),
+        }
+    }
+}
+
 impl Default for IpcConfig {
     fn default() -> Self {
         Self {
@@ -150,6 +179,7 @@ impl Default for Config {
             },
             host_metrics: HostMetricsConfig::default(),
             commands: CommandsConfig::default(),
+            eth_clients: EthClientsConfig::default(),
             ipc: IpcConfig::default(),
             logging: LoggingConfig::default(),
         }

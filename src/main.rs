@@ -133,6 +133,7 @@ async fn run_daemon(cfg: config::Config) -> Result<()> {
         let mut metrics = tokio::spawn(host_metrics::host_metrics_loop(
             state.clone(),
             cfg.host_metrics.clone(),
+            cfg.eth_clients.clone(),
             handles.outbound.clone(),
         ));
 

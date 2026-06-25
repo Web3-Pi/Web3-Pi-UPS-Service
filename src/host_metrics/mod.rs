@@ -5,6 +5,7 @@
 
 mod cpu;
 mod disk;
+pub mod eth;
 mod mem;
 mod network;
 mod uptime;
@@ -16,7 +17,7 @@ use tokio::sync::mpsc;
 use tokio::time::interval;
 use tracing::{debug, info, warn};
 
-use crate::config::HostMetricsConfig;
+use crate::config::{EthClientsConfig, HostMetricsConfig};
 use crate::proto::payloads::HostStatusV1;
 use crate::proto::{addr, class, flag, op, Frame};
 use crate::state::State;
@@ -39,6 +40,7 @@ pub struct HostMetricsSample {
 pub async fn host_metrics_loop(
     state: Arc<State>,
     cfg: HostMetricsConfig,
+    eth_cfg: EthClientsConfig,
     out_tx: mpsc::Sender<OutboundFrame>,
 ) {
     if cfg.interval_seconds == 0 {
@@ -78,10 +80,13 @@ pub async fn host_metrics_loop(
         let disk_pct = disk::read_used_pct("/").unwrap_or(0);
         let uptime_s = uptime::read_uptime_s().unwrap_or(0);
 
+        // Per-client systemd service state (execution / consensus / validator)
+        // packed into the single eth_client_state byte (2 bits each) — no wire
+        // change, firmware keeps forwarding the same frame. See host_metrics::eth.
+        let eth_client_state = eth::read_packed_state(&eth_cfg).await;
+
         let status = HostStatusV1 {
-            // ETH client integration is intentionally deferred (see plan: ETH
-            // monitoring lands in v2.x as a follow-up to this PR).
-            eth_client_state: 0,
+            eth_client_state,
             cpu_temp_dc: temp,
             mem_used_pct: mem_pct,
             disk_used_pct: disk_pct,
