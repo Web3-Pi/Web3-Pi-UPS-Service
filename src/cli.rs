@@ -278,9 +278,18 @@ fn print_host_block(s: &SnapshotMsg) {
     row("network", &format!("{net_rate}   {net_total}"));
 
     let (eth_exec, eth_cons, eth_val) = crate::host_metrics::eth::unpack(h.eth_client_state);
-    row("eth execution", crate::host_metrics::eth::state_name(eth_exec));
-    row("eth consensus", crate::host_metrics::eth::state_name(eth_cons));
-    row("eth validator", crate::host_metrics::eth::state_name(eth_val));
+    row(
+        "eth execution",
+        crate::host_metrics::eth::state_name(eth_exec),
+    );
+    row(
+        "eth consensus",
+        crate::host_metrics::eth::state_name(eth_cons),
+    );
+    row(
+        "eth validator",
+        crate::host_metrics::eth::state_name(eth_val),
+    );
 }
 
 fn row(label: &str, value: &str) {
