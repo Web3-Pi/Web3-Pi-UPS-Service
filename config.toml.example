@@ -29,13 +29,13 @@ delay_seconds = 30
 interval_seconds = 30
 
 [commands]
-# Master kill switch for `host.service.restart` REQs.
+# Master kill switch for all `host.service.{start,stop,restart}` REQs.
 allow_service_restart = true
-# Whitelist of systemd unit names (without `.service`) allowed to be restarted.
+# Whitelist of systemd unit names (without `.service`) the panel may
+# start/stop/restart. Stock Web3-Pi-vOS units; matches [eth_clients] below.
 service_whitelist = [
-    "w3p_geth",
-    "w3p_nimbus-beacon",
-    "w3p_lighthouse-beacon",
+    "geth",
+    "nimbus-beacon-node",
     "nimbus-validator",
 ]
 

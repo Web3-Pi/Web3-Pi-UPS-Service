@@ -95,6 +95,8 @@ pub mod op {
         pub const SHUTDOWN: u8 = 0x02;
         pub const RESET: u8 = 0x03;
         pub const SERVICE_RESTART: u8 = 0x04;
+        pub const SERVICE_START: u8 = 0x05;
+        pub const SERVICE_STOP: u8 = 0x06;
         pub const EVENT: u8 = 0x10;
     }
     pub mod ui {

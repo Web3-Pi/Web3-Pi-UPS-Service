@@ -64,7 +64,7 @@ pub struct HostMetricsConfig {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields, default)]
 pub struct CommandsConfig {
-    /// Master kill switch for `host.service.restart` REQs.
+    /// Master kill switch for all `host.service.{start,stop,restart}` REQs.
     pub allow_service_restart: bool,
     /// Whitelist of systemd unit names (without `.service`) allowed to be restarted.
     pub service_whitelist: Vec<String>,
@@ -121,9 +121,10 @@ impl Default for CommandsConfig {
         Self {
             allow_service_restart: true,
             service_whitelist: vec![
-                "w3p_geth".into(),
-                "w3p_nimbus-beacon".into(),
-                "w3p_lighthouse-beacon".into(),
+                // Stock Web3-Pi-vOS units (bare names; the agent appends
+                // `.service`). Matches the [eth_clients] monitoring defaults.
+                "geth".into(),
+                "nimbus-beacon-node".into(),
                 "nimbus-validator".into(),
             ],
         }

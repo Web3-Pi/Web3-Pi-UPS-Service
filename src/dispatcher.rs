@@ -130,7 +130,19 @@ async fn handle(
             commands.handle_host_reset(&frame, outbound).await;
         }
         (class::HOST, op::host::SERVICE_RESTART) if flags & flag::REQ != 0 => {
-            commands.handle_host_service_restart(&frame, outbound).await;
+            commands
+                .handle_host_service_action(&frame, outbound, "restart")
+                .await;
+        }
+        (class::HOST, op::host::SERVICE_START) if flags & flag::REQ != 0 => {
+            commands
+                .handle_host_service_action(&frame, outbound, "start")
+                .await;
+        }
+        (class::HOST, op::host::SERVICE_STOP) if flags & flag::REQ != 0 => {
+            commands
+                .handle_host_service_action(&frame, outbound, "stop")
+                .await;
         }
         (class::HOST, op::host::EVENT) => match HostEventV1::decode(&frame.payload) {
             Ok(e) => debug!(event = e.event, src = frame.src, "host.event echoed back"),

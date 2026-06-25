@@ -58,15 +58,20 @@ impl CommandsHandler {
         send_resp(req, out_tx).await;
     }
 
-    pub async fn handle_host_service_restart(
+    /// Handle a `host.service.{start,stop,restart}` REQ. `action` is the
+    /// systemctl verb ("start" | "stop" | "restart"). All three share the
+    /// `wups_host_service_restart_v1_hdr_t` payload (version + unit name), the
+    /// `allow_service_restart` kill switch, and the unit whitelist.
+    pub async fn handle_host_service_action(
         &self,
         req: &Frame,
         out_tx: &mpsc::Sender<OutboundFrame>,
+        action: &str,
     ) {
         let payload = match HostServiceRestartV1::decode(&req.payload) {
             Ok(p) => p,
             Err(e) => {
-                warn!(src = req.src, "host.service_restart decode: {e}");
+                warn!(src = req.src, action, "host.service decode: {e}");
                 send_resp(req, out_tx).await;
                 return;
             }
@@ -74,19 +79,19 @@ impl CommandsHandler {
         let unit = match std::str::from_utf8(&payload.unit) {
             Ok(s) => s.to_string(),
             Err(_) => {
-                warn!(src = req.src, "host.service_restart: unit name not UTF-8");
+                warn!(src = req.src, action, "host.service: unit name not UTF-8");
                 send_resp(req, out_tx).await;
                 return;
             }
         };
 
         if !self.commands_cfg.allow_service_restart {
-            warn!(unit = %unit, "host.service_restart denied: kill switch is off");
+            warn!(unit = %unit, action, "host.service denied: kill switch is off");
             send_resp(req, out_tx).await;
             return;
         }
         if !self.whitelist.contains(&unit) {
-            warn!(unit = %unit, "host.service_restart denied: not in whitelist");
+            warn!(unit = %unit, action, "host.service denied: not in whitelist");
             send_resp(req, out_tx).await;
             return;
         }
@@ -94,12 +99,12 @@ impl CommandsHandler {
         // We append `.service` for systemd; whitelist entries are stored
         // without the suffix so they match what operators type in the cloud UI.
         let unit_with_suffix = format!("{unit}.service");
-        info!(unit = %unit, "host.service_restart executing systemctl restart");
+        info!(unit = %unit, action, "host.service executing systemctl");
         if let Err(e) = Command::new("systemctl")
-            .args(["restart", &unit_with_suffix])
+            .args([action, &unit_with_suffix])
             .spawn()
         {
-            error!(unit = %unit, "systemctl restart spawn: {e}");
+            error!(unit = %unit, action, "systemctl {action} spawn: {e}");
         }
         send_resp(req, out_tx).await;
     }
