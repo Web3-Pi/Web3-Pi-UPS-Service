@@ -539,7 +539,9 @@ impl NetTimeSyncV1 {
 /// `host.status` — `wups_host_status_v1_t`. 12 bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct HostStatusV1 {
-    pub eth_client_state: u8, // 0=stopped 1=syncing 2=synced 3=error
+    /// Packed per-client systemd SERVICE state — 2 bits each:
+    /// `[1:0]=execution [3:2]=consensus [5:4]=validator` (see `host_metrics::eth`).
+    pub eth_client_state: u8,
     pub cpu_temp_dc: i16,
     pub mem_used_pct: u8,
     pub disk_used_pct: u8,
