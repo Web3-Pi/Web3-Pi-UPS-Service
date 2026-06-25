@@ -16,6 +16,14 @@ use crate::proto::{addr, flag, Frame};
 use crate::state::State;
 use crate::transport::OutboundFrame;
 
+// host.service RESP result codes (RESP payload[0]). 0 = ok; the panel surfaces
+// any non-zero value as `code_N`, so a denied/failed action is no longer
+// mis-reported as success by the empty-payload=success convention.
+const RESP_OK: u8 = 0;
+const RESP_BAD_REQUEST: u8 = 1; // malformed payload / non-UTF8 unit name
+const RESP_DENIED: u8 = 2; // kill switch off, or unit not in whitelist
+const RESP_SYSTEMCTL_FAILED: u8 = 3; // systemctl exited non-zero / failed to run
+
 pub struct CommandsHandler {
     #[allow(dead_code)] // kept for future use (e.g., recording last command in state)
     state: Arc<State>,
@@ -72,7 +80,7 @@ impl CommandsHandler {
             Ok(p) => p,
             Err(e) => {
                 warn!(src = req.src, action, "host.service decode: {e}");
-                send_resp(req, out_tx).await;
+                send_resp_code(req, out_tx, RESP_BAD_REQUEST).await;
                 return;
             }
         };
@@ -80,19 +88,19 @@ impl CommandsHandler {
             Ok(s) => s.to_string(),
             Err(_) => {
                 warn!(src = req.src, action, "host.service: unit name not UTF-8");
-                send_resp(req, out_tx).await;
+                send_resp_code(req, out_tx, RESP_BAD_REQUEST).await;
                 return;
             }
         };
 
         if !self.commands_cfg.allow_service_restart {
             warn!(unit = %unit, action, "host.service denied: kill switch is off");
-            send_resp(req, out_tx).await;
+            send_resp_code(req, out_tx, RESP_DENIED).await;
             return;
         }
         if !self.whitelist.contains(&unit) {
             warn!(unit = %unit, action, "host.service denied: not in whitelist");
-            send_resp(req, out_tx).await;
+            send_resp_code(req, out_tx, RESP_DENIED).await;
             return;
         }
 
@@ -100,13 +108,26 @@ impl CommandsHandler {
         // without the suffix so they match what operators type in the cloud UI.
         let unit_with_suffix = format!("{unit}.service");
         info!(unit = %unit, action, "host.service executing systemctl");
-        if let Err(e) = Command::new("systemctl")
+        // Await the exit status so the RESP reports the REAL outcome — a
+        // fire-and-forget spawn() reports success even when systemctl failed
+        // (wrong/unknown unit, etc.). The agent runs as root, so a non-zero
+        // status is a genuine failure, surfaced to the panel as code_3.
+        let code = match Command::new("systemctl")
             .args([action, &unit_with_suffix])
-            .spawn()
+            .status()
+            .await
         {
-            error!(unit = %unit, action, "systemctl {action} spawn: {e}");
-        }
-        send_resp(req, out_tx).await;
+            Ok(s) if s.success() => RESP_OK,
+            Ok(s) => {
+                warn!(unit = %unit, action, exit = ?s.code(), "systemctl exited non-zero");
+                RESP_SYSTEMCTL_FAILED
+            }
+            Err(e) => {
+                error!(unit = %unit, action, "systemctl {action} failed to run: {e}");
+                RESP_SYSTEMCTL_FAILED
+            }
+        };
+        send_resp_code(req, out_tx, code).await;
     }
 }
 
@@ -134,6 +155,24 @@ async fn send_resp(req: &Frame, out_tx: &mpsc::Sender<OutboundFrame>) {
     };
     if out_tx.send(OutboundFrame { frame: resp }).await.is_err() {
         warn!("send_resp: outbound closed");
+    }
+}
+
+/// Like [`send_resp`] but carries a single result-code byte (0 = ok, non-zero =
+/// failure; the panel surfaces non-zero as `code_N`). Used by host.service so a
+/// denied/failed action isn't mis-scored as success by the empty-payload rule.
+async fn send_resp_code(req: &Frame, out_tx: &mpsc::Sender<OutboundFrame>, code: u8) {
+    let resp = Frame {
+        dst: req.src,
+        src: addr::RPI,
+        class: req.class,
+        op: req.op,
+        flags: flag::RESP,
+        seq: req.seq,
+        payload: vec![code],
+    };
+    if out_tx.send(OutboundFrame { frame: resp }).await.is_err() {
+        warn!("send_resp_code: outbound closed");
     }
 }
 

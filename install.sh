@@ -83,6 +83,17 @@ install_config() {
     else
         log_warn "Config file already exists, skipping (backup at config.toml.example)"
         install -m 644 "${tmp_dir}/config.toml.example" "${CONFIG_DIR}/config.toml.example"
+        # The service_whitelist + [eth_clients] unit names changed in v2.2.x
+        # (w3p_geth / w3p_nimbus-beacon -> geth / nimbus-beacon-node /
+        # nimbus-validator). A preserved old config keeps the stale names, so the
+        # panel's ETH-client start/stop/restart will be DENIED device-side. Warn
+        # loudly with the exact fix rather than silently mismatching.
+        if grep -qE '"w3p_' "${CONFIG_DIR}/config.toml" 2>/dev/null; then
+            log_warn "Your existing config.toml still lists OLD service names (w3p_*)."
+            log_warn "Panel ETH-client commands will be DENIED until you update it:"
+            log_warn "  [commands] service_whitelist = [\"geth\", \"nimbus-beacon-node\", \"nimbus-validator\"]"
+            log_warn "  (and optionally an [eth_clients] section), then: sudo systemctl restart ${SERVICE_NAME}"
+        fi
     fi
 
     if [ ! -f "${CONFIG_DIR}/shutdown.sh" ]; then
