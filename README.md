@@ -113,6 +113,36 @@ Frames the agent emits to the UPS:
 
 See [`src/proto/`](src/proto/) for the complete payload catalogue.
 
+## ups-live — desktop live dashboard
+
+A second binary in this crate: a single-screen terminal dashboard for bench
+work. Since firmware `PD_DataRole`, plugging the UPS output into a laptop
+gives the laptop the USB host role (PD DR_Swap), so the WUPS stream is
+available directly on macOS/Linux — no Raspberry Pi needed.
+
+```bash
+cargo run --release --bin ups-live          # auto-detects the UPS (2e8a:000a)
+cargo run --release --bin ups-live -- /dev/cu.usbmodemXXXX
+```
+
+Shows the live power path (input/PD contracts/output rail), battery, charge
+state, temperatures and faults from `power.status` v2, plus a scrolling tail
+of `system.log` frames — including the CH32X `PD: ...` protocol event trace —
+and `power.event` broadcasts. Reuses the agent's `proto` module via the crate
+library target; no protocol duplication.
+
+Requirements:
+- Rust toolchain (`rustup`); no drivers needed on macOS
+- UPS firmware with DR_Swap support (`PD_DataRole` branch or newer) — older
+  firmware never hands the USB host role to a laptop, so no serial device
+  appears
+- on first attach macOS asks to allow the "Web3_Pi_UPS" accessory — click
+  Allow
+
+On a Raspberry Pi the installed agent holds the serial port exclusively —
+use `journalctl -u w3p-ups -f` there instead, or stop the agent for the
+duration of a direct `ups-live` session.
+
 ## Usage
 
 ### Service Management
