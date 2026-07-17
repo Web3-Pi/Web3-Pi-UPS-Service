@@ -131,6 +131,18 @@ of `system.log` frames — including the CH32X `PD: ...` protocol event trace �
 and `power.event` broadcasts. Reuses the agent's `proto` module via the crate
 library target; no protocol duplication.
 
+Requirements:
+- Rust toolchain (`rustup`); no drivers needed on macOS
+- UPS firmware with DR_Swap support (`PD_DataRole` branch or newer) — older
+  firmware never hands the USB host role to a laptop, so no serial device
+  appears
+- on first attach macOS asks to allow the "Web3_Pi_UPS" accessory — click
+  Allow
+
+On a Raspberry Pi the installed agent holds the serial port exclusively —
+use `journalctl -u w3p-ups -f` there instead, or stop the agent for the
+duration of a direct `ups-live` session.
+
 ## Usage
 
 ### Service Management
