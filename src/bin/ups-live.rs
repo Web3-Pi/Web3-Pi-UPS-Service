@@ -294,8 +294,21 @@ async fn main() -> anyhow::Result<()> {
     // USB-CDC ignores the baud rate; 115200 matches the RP2040's Serial.begin.
     let mut port = tokio_serial::new(&port_path, 115_200).open_native_async()?;
 
-    print!("\x1b[2J\x1b[?25l"); // clear screen, hide cursor
-    let restore = || print!("\x1b[?25h\x1b[0m\n");
+    // Enter the alternate screen buffer (restores the user's terminal
+    // content on exit), clear it, home the cursor, hide the cursor — and
+    // flush immediately: print! alone leaves the escapes in the stdout
+    // buffer and the first rendered frame then races the shell prompt
+    // (observed as a missing title row on the first bench run).
+    {
+        let mut so = std::io::stdout().lock();
+        let _ = so.write_all(b"\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l");
+        let _ = so.flush();
+    }
+    let restore = || {
+        let mut so = std::io::stdout().lock();
+        let _ = so.write_all(b"\x1b[?25h\x1b[0m\x1b[?1049l");
+        let _ = so.flush();
+    };
 
     let mut app = App::new();
     app.push_log(format!("connected to {port_path}"));
