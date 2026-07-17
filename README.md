@@ -113,6 +113,24 @@ Frames the agent emits to the UPS:
 
 See [`src/proto/`](src/proto/) for the complete payload catalogue.
 
+## ups-live — desktop live dashboard
+
+A second binary in this crate: a single-screen terminal dashboard for bench
+work. Since firmware `PD_DataRole`, plugging the UPS output into a laptop
+gives the laptop the USB host role (PD DR_Swap), so the WUPS stream is
+available directly on macOS/Linux — no Raspberry Pi needed.
+
+```bash
+cargo run --release --bin ups-live          # auto-detects the UPS (2e8a:000a)
+cargo run --release --bin ups-live -- /dev/cu.usbmodemXXXX
+```
+
+Shows the live power path (input/PD contracts/output rail), battery, charge
+state, temperatures and faults from `power.status` v2, plus a scrolling tail
+of `system.log` frames — including the CH32X `PD: ...` protocol event trace —
+and `power.event` broadcasts. Reuses the agent's `proto` module via the crate
+library target; no protocol duplication.
+
 ## Usage
 
 ### Service Management
