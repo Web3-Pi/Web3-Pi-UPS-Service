@@ -1,7 +1,7 @@
 //! Linux host metrics: CPU (temp / load / usage), RAM, root disk, network,
 //! uptime. Emits a `host.status` EVENT to RP2040 on a configurable cadence
-//! (default 30 s, sized for the ~500 MB/mo LTE data plan; AGENT-2 in
-//! implementation-plan).
+//! (default 30 s, sized for the 1NCE SIM's 500 MB lifetime prepaid pool —
+//! 10-year validity, not a monthly plan; AGENT-2 in implementation-plan).
 
 mod cpu;
 mod disk;
